@@ -202,7 +202,7 @@ void AppForm::btnSave_Click ( System::Object^ sender, System::EventArgs^ e )
                           int ident_pos = line->ToLower()->IndexOf("modules") - 1;
                           if ( bMissingLineEBD )
                           {
-                            String^ identstr = gcnew String(' ', ident_pos);
+                            String^ identstr = gcnew String(L' ', ident_pos);
                             String^ InsertLine; 
                             InsertLine = Append(identstr, "\"EnabledByDefault\": ");
                             InsertLine = InsertLine->Insert(InsertLine->Length, mDRPlug["celEnabledByDefault"]->ToString()->ToLower());
@@ -213,7 +213,7 @@ void AppForm::btnSave_Click ( System::Object^ sender, System::EventArgs^ e )
                           }
                           if ( bMissingLineINS )
                           {
-                            String^ identstr = gcnew String(' ', ident_pos);
+                            String^ identstr = gcnew String(L' ', ident_pos);
                             String^ InsertLine; 
                             InsertLine = Append(identstr, "\"Installed\": ");
                             InsertLine = InsertLine->Insert(InsertLine->Length, mDRPlug["celInstalled"]->ToString()->ToLower());
@@ -369,7 +369,11 @@ void AddUPlugin(String^ FileUPlugin)
 {
     DataRow^ mDR = AppForm::dtbPlugins->NewRow();
     ReadUPlugin(FileUPlugin, mDR);
-    AppForm::dtbPlugins->Rows->Add(mDR);
+    if (!AppForm::dtbPlugins->Rows->Contains(mDR["celName"])) {
+      AppForm::dtbPlugins->Rows->Add(mDR);
+    } else {
+      StatusUpdate(Append("Duplicated key : ", mDR["celName"]->ToString()));
+    }
 }
 
 void ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
@@ -582,6 +586,7 @@ void CheckAcess(String^ FileUPlugin)
     }
     catch (const Exception^ err)
     {
+      const Exception^ _ = err;
       throw gcnew AccessViolationException(Append(Append("File Access Error: ", FileUPlugin), " is Read-Only, try to run UEPlugins_DisableDefault as Administrator."));
     }
   }
