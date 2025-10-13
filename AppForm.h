@@ -726,6 +726,7 @@ void AddUPlugin(String^ FileUPlugin);
 void ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow);
 void GetJSONValue(String^& str0);
 
+bool SafeToBoolean(String^ input);
 int CountEnabledByDefault();
 bool IsIgnoredFolder(String^ Path);
 void CheckAcess(String^ FileUPlugin);

@@ -409,13 +409,13 @@ void ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
         if (line->Contains("Installed"))
         {
           GetJSONValue(line);
-          mDataRow["celInstalled"] = line;
+          mDataRow["celInstalled"] = SafeToBoolean(line);
           continue;
         }
         if ( line->Contains("EnabledByDefault") ) 
         {
             GetJSONValue(line);
-            mDataRow["celEnabledByDefault"] = line;
+            mDataRow["celEnabledByDefault"] = SafeToBoolean(line);
             continue;            
         }
         if ( line->Contains("FriendlyName") ) 
@@ -440,6 +440,32 @@ void ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
     reader->Close();
     filestream->Close();
 };
+
+bool SafeToBoolean(String^ input) {
+    if (String::IsNullOrWhiteSpace(input)) {
+        return false;
+    }
+    
+    String^ trimmed = input->Trim();
+    if (String::Compare(trimmed, "1", true) == 0 || 
+        String::Compare(trimmed, "true", true) == 0 ||
+        String::Compare(trimmed, "yes", true) == 0 ||
+        String::Compare(trimmed, "on", true) == 0) {
+        return true;
+    }
+    if (String::Compare(trimmed, "0", true) == 0 || 
+        String::Compare(trimmed, "false", true) == 0 ||
+        String::Compare(trimmed, "no", true) == 0 ||
+        String::Compare(trimmed, "off", true) == 0) {
+        return false;
+    }
+    
+    try {
+        return System::Convert::ToBoolean(trimmed);
+    } catch (FormatException^) {
+        return false;
+    }
+}
 
 void GetJSONValue(String^& str0)
 {
