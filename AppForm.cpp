@@ -65,7 +65,7 @@ void AppForm::UpdateFlow ( )
       56;
 }
 
-void StatusUpdate(String^ Message) 
+void AppForm::StatusUpdate(String^ Message)
 {
     AppForm::lblStatus->Text = Message;
 }
@@ -286,7 +286,7 @@ void AppForm::mnuTemplate_MouseHover(System::Object^ sender, System::EventArgs^ 
   StatusUpdate("Save or Load templates of plugins state lists.");
 }
 
-void StateUpdate(AppState State)
+void AppForm::StateUpdate(AppState State)
 {
     switch ( State ) {
         case AppState::Default:
@@ -310,7 +310,7 @@ String^ ReplaceSlashes(String^ Path)
     return Path;
 }
 
-void Searching(String^ Path)
+void AppForm::Searching(String^ Path)
 {
     StateUpdate(AppState::Wait);
     StatusUpdate("Searching UPlugins ...");
@@ -341,7 +341,7 @@ void Searching(String^ Path)
     StateUpdate(AppState::Default);
 }
 
-void FindUPlugin(String^ Path)
+void AppForm::FindUPlugin(String^ Path)
 {
     for each (String^ dirPlugin in Directory::EnumerateDirectories(Path) )
     {
@@ -365,7 +365,7 @@ void FindUPlugin(String^ Path)
     }
 }
 
-void AddUPlugin(String^ FileUPlugin)
+void AppForm::AddUPlugin(String^ FileUPlugin)
 {
     DataRow^ mDR = AppForm::dtbPlugins->NewRow();
     ReadUPlugin(FileUPlugin, mDR);
@@ -376,7 +376,7 @@ void AddUPlugin(String^ FileUPlugin)
     }
 }
 
-void ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
+void AppForm::ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
 {
     CheckAcess(FileUPlugin);
     FileStream^ filestream = gcnew FileStream(FileUPlugin, FileMode::Open);
@@ -488,7 +488,7 @@ void GetJSONValue(String^& str0)
     }
 }
 
-int CountEnabledByDefault() 
+int AppForm::CountEnabledByDefault()
 {
     int iCounted = 0;
     for each ( DataRow^ mDR in AppForm::dtbPlugins->Rows )
@@ -516,7 +516,7 @@ bool IsIgnoredFolder(String^ Path)
     return bIsIgnoreFolder;
 }
 
-void ControlsStateChange(ControlsState State)
+void AppForm::ControlsStateChange(ControlsState State)
 {
     bool bState = (bool)State;
     AppForm::cmbUEFolder->Enabled = bState;
@@ -550,7 +550,7 @@ void AppForm::txtSearch_KeyUp(System::Object^ sender, System::Windows::Forms::Ke
   }
 }
 
-void BackupAll() 
+void AppForm::BackupAll()
 {
   String^ bkpPath = Append(Application::StartupPath, "\\UEPlugins_DisableDefault.uplugins_backup");
   if (!File::Exists(bkpPath)) {
@@ -581,7 +581,7 @@ void BackupAll()
   }
 }
 
-List<String^>^ FindAllUPlugins(String^ Path) 
+List<String^>^ AppForm::FindAllUPlugins(String^ Path)
 {
   Generic::List<String^>^ aPluginsList = gcnew Generic::List<String^>();
   for each (String ^ dirPlugin in Directory::EnumerateDirectories(Path)) {
