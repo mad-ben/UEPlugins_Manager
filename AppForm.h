@@ -59,7 +59,12 @@ namespace UEPluginsDisableDefault {
         public: System::Windows::Forms::ToolStripMenuItem^ mnuTemplateSave;
         public: System::Windows::Forms::ToolStripMenuItem^ mnuTemplateLoad;
         public: System::Windows::Forms::ToolStripMenuItem^ mnuTemplateMinimal;
-        public: System::Windows::Forms::ToolStripDropDownButton^ btnSave;
+    private: System::Windows::Forms::Splitter^ splitter3;
+    private: System::Windows::Forms::Button^ btnRemove;
+    private: System::Windows::Forms::Button^ btnRestore;
+    public:
+
+    public: System::Windows::Forms::ToolStripDropDownButton^ btnSave;
     protected:
         /// <summary>
         /// Clean up any resources being used.
@@ -86,7 +91,9 @@ namespace UEPluginsDisableDefault {
         System::Data::DataColumn^ celCategory;
         System::Data::DataColumn^ celVersionName;
         System::Data::DataColumn^ celPath;
+        System::Data::DataColumn^ celDependencies;
         System::Data::DataColumn^ celIcon;
+        System::Data::DataColumn^ celOffload;
         System::Windows::Forms::DataGridViewCheckBoxColumn^ celEnabledByDefaultDataGridViewCheckBoxColumn;
         System::Windows::Forms::DataGridViewCheckBoxColumn^ celInstalledDataGridViewCheckBoxColumn;
         System::Windows::Forms::DataGridViewTextBoxColumn^ celCategoryDataGridViewTextBoxColumn;
@@ -95,7 +102,9 @@ namespace UEPluginsDisableDefault {
         System::Windows::Forms::DataGridViewTextBoxColumn^ celFriendlyNameDataGridViewTextBoxColumn;
         System::Windows::Forms::DataGridViewTextBoxColumn^ celDescriptionDataGridViewTextBoxColumn;
         System::Windows::Forms::DataGridViewTextBoxColumn^ celPathDataGridViewTextBoxColumn;
+        System::Windows::Forms::DataGridViewTextBoxColumn^ celDependenciesDataGridViewTextBoxColumn;
         System::Windows::Forms::DataGridViewTextBoxColumn^ celVersionNameDataGridViewTextBoxColumn;
+        System::Windows::Forms::DataGridViewCheckBoxColumn^ celOffloadDataGridViewCheckBoxColumn;
         System::Windows::Forms::PictureBox^ imgSearch;
         System::Windows::Forms::Splitter^ splitter1;
         System::Windows::Forms::Splitter^ splitter2;
@@ -114,6 +123,7 @@ namespace UEPluginsDisableDefault {
         {
             System::ComponentModel::ComponentResourceManager^ resources = (gcnew System::ComponentModel::ComponentResourceManager(AppForm::typeid));
             System::Windows::Forms::DataGridViewCellStyle^ dataGridViewCellStyle1 = (gcnew System::Windows::Forms::DataGridViewCellStyle());
+            System::Windows::Forms::DataGridViewCellStyle^ dataGridViewCellStyle2 = (gcnew System::Windows::Forms::DataGridViewCellStyle());
             this->stsStrip = (gcnew System::Windows::Forms::StatusStrip());
             this->lblStatus = (gcnew System::Windows::Forms::ToolStripStatusLabel());
             this->btnSave = (gcnew System::Windows::Forms::ToolStripDropDownButton());
@@ -137,6 +147,7 @@ namespace UEPluginsDisableDefault {
             this->splitter2 = (gcnew System::Windows::Forms::Splitter());
             this->imgSearch = (gcnew System::Windows::Forms::PictureBox());
             this->txtSearch = (gcnew System::Windows::Forms::TextBox());
+            this->splitter3 = (gcnew System::Windows::Forms::Splitter());
             this->dlgBrowse = (gcnew System::Windows::Forms::FolderBrowserDialog());
             this->datPlugins = (gcnew System::Data::DataSet());
             this->dtbPlugins = (gcnew System::Data::DataTable());
@@ -148,6 +159,8 @@ namespace UEPluginsDisableDefault {
             this->celCategory = (gcnew System::Data::DataColumn());
             this->celVersionName = (gcnew System::Data::DataColumn());
             this->celPath = (gcnew System::Data::DataColumn());
+            this->celDependencies = (gcnew System::Data::DataColumn());
+            this->celOffload = (gcnew System::Data::DataColumn());
             this->celIcon = (gcnew System::Data::DataColumn());
             this->dtbPluginsOrig = (gcnew System::Data::DataTable());
             this->grdPlugins = (gcnew System::Windows::Forms::DataGridView());
@@ -160,6 +173,10 @@ namespace UEPluginsDisableDefault {
             this->celDescriptionDataGridViewTextBoxColumn = (gcnew System::Windows::Forms::DataGridViewTextBoxColumn());
             this->celPathDataGridViewTextBoxColumn = (gcnew System::Windows::Forms::DataGridViewTextBoxColumn());
             this->celVersionNameDataGridViewTextBoxColumn = (gcnew System::Windows::Forms::DataGridViewTextBoxColumn());
+            this->celDependenciesDataGridViewTextBoxColumn = (gcnew System::Windows::Forms::DataGridViewTextBoxColumn());
+            this->celOffloadDataGridViewCheckBoxColumn = (gcnew System::Windows::Forms::DataGridViewCheckBoxColumn());
+            this->btnRemove = (gcnew System::Windows::Forms::Button());
+            this->btnRestore = (gcnew System::Windows::Forms::Button());
             this->stsStrip->SuspendLayout();
             this->flwUEFolder->SuspendLayout();
             this->mnuStrip->SuspendLayout();
@@ -219,12 +236,16 @@ namespace UEPluginsDisableDefault {
             this->flwUEFolder->Controls->Add(this->splitter2);
             this->flwUEFolder->Controls->Add(this->imgSearch);
             this->flwUEFolder->Controls->Add(this->txtSearch);
+            this->flwUEFolder->Controls->Add(this->splitter3);
+            this->flwUEFolder->Controls->Add(this->btnRemove);
+            this->flwUEFolder->Controls->Add(this->btnRestore);
             this->flwUEFolder->Dock = System::Windows::Forms::DockStyle::Top;
             this->flwUEFolder->Location = System::Drawing::Point(0, 0);
             this->flwUEFolder->Name = L"flwUEFolder";
             this->flwUEFolder->Size = System::Drawing::Size(963, 30);
             this->flwUEFolder->TabIndex = 2;
             this->flwUEFolder->WrapContents = false;
+            this->flwUEFolder->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &AppForm::flwUEFolder_Paint);
             // 
             // mnuStrip
             // 
@@ -352,9 +373,9 @@ namespace UEPluginsDisableDefault {
             this->lblUEFolder->Location = System::Drawing::Point(71, 10);
             this->lblUEFolder->Margin = System::Windows::Forms::Padding(3, 10, 3, 0);
             this->lblUEFolder->Name = L"lblUEFolder";
-            this->lblUEFolder->Size = System::Drawing::Size(126, 20);
+            this->lblUEFolder->Size = System::Drawing::Size(110, 20);
             this->lblUEFolder->TabIndex = 0;
-            this->lblUEFolder->Text = L"Unreal Engine Folder";
+            this->lblUEFolder->Text = L"UE Backup Folder";
             // 
             // cmbUEFolder
             // 
@@ -363,7 +384,7 @@ namespace UEPluginsDisableDefault {
             this->cmbUEFolder->FlatStyle = System::Windows::Forms::FlatStyle::System;
             this->cmbUEFolder->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Regular, System::Drawing::GraphicsUnit::Point,
                 static_cast<System::Byte>(0)));
-            this->cmbUEFolder->Location = System::Drawing::Point(203, 5);
+            this->cmbUEFolder->Location = System::Drawing::Point(187, 5);
             this->cmbUEFolder->Margin = System::Windows::Forms::Padding(3, 5, 3, 3);
             this->cmbUEFolder->Name = L"cmbUEFolder";
             this->cmbUEFolder->Size = System::Drawing::Size(240, 21);
@@ -379,7 +400,7 @@ namespace UEPluginsDisableDefault {
                 static_cast<System::Byte>(0)));
             this->btnBrowse->Image = (cli::safe_cast<System::Drawing::Image^>(resources->GetObject(L"btnBrowse.Image")));
             this->btnBrowse->ImageAlign = System::Drawing::ContentAlignment::TopLeft;
-            this->btnBrowse->Location = System::Drawing::Point(449, 3);
+            this->btnBrowse->Location = System::Drawing::Point(433, 3);
             this->btnBrowse->Name = L"btnBrowse";
             this->btnBrowse->Size = System::Drawing::Size(70, 24);
             this->btnBrowse->TabIndex = 2;
@@ -391,7 +412,7 @@ namespace UEPluginsDisableDefault {
             // splitter2
             // 
             this->splitter2->BorderStyle = System::Windows::Forms::BorderStyle::FixedSingle;
-            this->splitter2->Location = System::Drawing::Point(525, 3);
+            this->splitter2->Location = System::Drawing::Point(509, 3);
             this->splitter2->Name = L"splitter2";
             this->splitter2->Size = System::Drawing::Size(2, 24);
             this->splitter2->TabIndex = 9;
@@ -401,7 +422,7 @@ namespace UEPluginsDisableDefault {
             // 
             this->imgSearch->BackgroundImage = (cli::safe_cast<System::Drawing::Image^>(resources->GetObject(L"imgSearch.BackgroundImage")));
             this->imgSearch->BackgroundImageLayout = System::Windows::Forms::ImageLayout::Stretch;
-            this->imgSearch->Location = System::Drawing::Point(530, 5);
+            this->imgSearch->Location = System::Drawing::Point(514, 5);
             this->imgSearch->Margin = System::Windows::Forms::Padding(0, 5, 0, 0);
             this->imgSearch->Name = L"imgSearch";
             this->imgSearch->Size = System::Drawing::Size(20, 20);
@@ -417,7 +438,7 @@ namespace UEPluginsDisableDefault {
             this->txtSearch->Font = (gcnew System::Drawing::Font(L"Microsoft Sans Serif", 8.25F, System::Drawing::FontStyle::Bold, System::Drawing::GraphicsUnit::Point,
                 static_cast<System::Byte>(0)));
             this->txtSearch->HideSelection = false;
-            this->txtSearch->Location = System::Drawing::Point(550, 5);
+            this->txtSearch->Location = System::Drawing::Point(534, 5);
             this->txtSearch->Margin = System::Windows::Forms::Padding(0, 5, 3, 0);
             this->txtSearch->MaxLength = 200;
             this->txtSearch->Name = L"txtSearch";
@@ -426,6 +447,15 @@ namespace UEPluginsDisableDefault {
             this->txtSearch->WordWrap = false;
             this->txtSearch->GotFocus += gcnew System::EventHandler(this, &AppForm::txtSearch_GotFocus);
             this->txtSearch->KeyUp += gcnew System::Windows::Forms::KeyEventHandler(this, &AppForm::txtSearch_KeyUp);
+            // 
+            // splitter3
+            // 
+            this->splitter3->BorderStyle = System::Windows::Forms::BorderStyle::FixedSingle;
+            this->splitter3->Location = System::Drawing::Point(660, 3);
+            this->splitter3->Name = L"splitter3";
+            this->splitter3->Size = System::Drawing::Size(2, 24);
+            this->splitter3->TabIndex = 10;
+            this->splitter3->TabStop = false;
             // 
             // dlgBrowse
             // 
@@ -440,9 +470,10 @@ namespace UEPluginsDisableDefault {
             // dtbPlugins
             // 
             this->dtbPlugins->CaseSensitive = false;
-            this->dtbPlugins->Columns->AddRange(gcnew cli::array< System::Data::DataColumn^  >(9) {
+            this->dtbPlugins->Columns->AddRange(gcnew cli::array< System::Data::DataColumn^  >(11) {
                 this->celName, this->celEnabledDef,
-                    this->celInstalled, this->celFriendlyName, this->celDescription, this->celCategory, this->celVersionName, this->celPath, this->celIcon
+                    this->celInstalled, this->celFriendlyName, this->celDescription, this->celCategory, this->celVersionName, this->celPath, this->celDependencies,
+                    this->celOffload, this->celIcon
             });
             cli::array< System::String^ >^ __mcTemp__1 = gcnew cli::array< System::String^  >(1) { L"celName" };
             this->dtbPlugins->Constraints->AddRange(gcnew cli::array< System::Data::Constraint^  >(1) {
@@ -496,6 +527,18 @@ namespace UEPluginsDisableDefault {
             // 
             this->celPath->ColumnName = L"celPath";
             // 
+            // celDependencies
+            // 
+            this->celDependencies->Caption = L"Dependencies";
+            this->celDependencies->ColumnName = L"celDependencies";
+            this->celDependencies->DefaultValue = L"";
+            // 
+            // celOffload
+            // 
+            this->celOffload->ColumnName = L"celOffload";
+            this->celOffload->DataType = System::Boolean::typeid;
+            this->celOffload->DefaultValue = false;
+            // 
             // celIcon
             // 
             this->celIcon->ColumnName = L"celIcon";
@@ -512,6 +555,7 @@ namespace UEPluginsDisableDefault {
             this->grdPlugins->AllowUserToDeleteRows = false;
             this->grdPlugins->AllowUserToResizeRows = false;
             this->grdPlugins->AutoGenerateColumns = false;
+            this->grdPlugins->AutoSizeRowsMode = System::Windows::Forms::DataGridViewAutoSizeRowsMode::DisplayedCells;
             this->grdPlugins->ClipboardCopyMode = System::Windows::Forms::DataGridViewClipboardCopyMode::EnableWithoutHeaderText;
             dataGridViewCellStyle1->Alignment = System::Windows::Forms::DataGridViewContentAlignment::MiddleCenter;
             dataGridViewCellStyle1->BackColor = System::Drawing::SystemColors::Control;
@@ -523,11 +567,12 @@ namespace UEPluginsDisableDefault {
             dataGridViewCellStyle1->WrapMode = System::Windows::Forms::DataGridViewTriState::True;
             this->grdPlugins->ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
             this->grdPlugins->ColumnHeadersHeightSizeMode = System::Windows::Forms::DataGridViewColumnHeadersHeightSizeMode::AutoSize;
-            this->grdPlugins->Columns->AddRange(gcnew cli::array< System::Windows::Forms::DataGridViewColumn^  >(9) {
+            this->grdPlugins->Columns->AddRange(gcnew cli::array< System::Windows::Forms::DataGridViewColumn^  >(11) {
                 this->celEnabledByDefaultDataGridViewCheckBoxColumn,
                     this->celInstalledDataGridViewCheckBoxColumn, this->celCategoryDataGridViewTextBoxColumn, this->celIconDataGridViewImageColumn,
                     this->celNameDataGridViewTextBoxColumn, this->celFriendlyNameDataGridViewTextBoxColumn, this->celDescriptionDataGridViewTextBoxColumn,
-                    this->celPathDataGridViewTextBoxColumn, this->celVersionNameDataGridViewTextBoxColumn
+                    this->celPathDataGridViewTextBoxColumn, this->celVersionNameDataGridViewTextBoxColumn, this->celDependenciesDataGridViewTextBoxColumn,
+                    this->celOffloadDataGridViewCheckBoxColumn
             });
             this->grdPlugins->DataMember = L"dtbPlugins";
             this->grdPlugins->DataSource = this->datPlugins;
@@ -622,6 +667,45 @@ namespace UEPluginsDisableDefault {
             this->celVersionNameDataGridViewTextBoxColumn->ReadOnly = true;
             this->celVersionNameDataGridViewTextBoxColumn->Width = 40;
             // 
+            // celDependenciesDataGridViewTextBoxColumn
+            // 
+            this->celDependenciesDataGridViewTextBoxColumn->DataPropertyName = L"celDependencies";
+            dataGridViewCellStyle2->WrapMode = System::Windows::Forms::DataGridViewTriState::True;
+            this->celDependenciesDataGridViewTextBoxColumn->DefaultCellStyle = dataGridViewCellStyle2;
+            this->celDependenciesDataGridViewTextBoxColumn->FillWeight = 180;
+            this->celDependenciesDataGridViewTextBoxColumn->HeaderText = L"Dependencies";
+            this->celDependenciesDataGridViewTextBoxColumn->Name = L"celDependenciesDataGridViewTextBoxColumn";
+            this->celDependenciesDataGridViewTextBoxColumn->ReadOnly = true;
+            this->celDependenciesDataGridViewTextBoxColumn->Width = 180;
+            // 
+            // celOffloadDataGridViewCheckBoxColumn
+            // 
+            this->celOffloadDataGridViewCheckBoxColumn->DataPropertyName = L"celOffload";
+            this->celOffloadDataGridViewCheckBoxColumn->FillWeight = 55;
+            this->celOffloadDataGridViewCheckBoxColumn->HeaderText = L"Remove";
+            this->celOffloadDataGridViewCheckBoxColumn->Name = L"celOffloadDataGridViewCheckBoxColumn";
+            this->celOffloadDataGridViewCheckBoxColumn->Width = 55;
+            // 
+            // btnRemove
+            // 
+            this->btnRemove->Location = System::Drawing::Point(668, 3);
+            this->btnRemove->Name = L"btnRemove";
+            this->btnRemove->Size = System::Drawing::Size(75, 23);
+            this->btnRemove->TabIndex = 11;
+            this->btnRemove->Text = L"Backup";
+            this->btnRemove->UseVisualStyleBackColor = true;
+            this->btnRemove->Click += gcnew System::EventHandler(this, &AppForm::btnRemove_Click);
+            // 
+            // btnRestore
+            // 
+            this->btnRestore->Location = System::Drawing::Point(749, 3);
+            this->btnRestore->Name = L"btnRestore";
+            this->btnRestore->Size = System::Drawing::Size(75, 23);
+            this->btnRestore->TabIndex = 12;
+            this->btnRestore->Text = L"Restore";
+            this->btnRestore->UseVisualStyleBackColor = true;
+            this->btnRestore->Click += gcnew System::EventHandler(this, &AppForm::btnRestore_Click);
+            // 
             // AppForm
             // 
             this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
@@ -661,6 +745,8 @@ namespace UEPluginsDisableDefault {
         void cmbUEFolder_SelectedIndexChanged ( System::Object^ sender, System::EventArgs^ e );
         void btnBrowse_Click ( System::Object^ sender, System::EventArgs^ e );
         void btnSave_Click ( System::Object^ sender, System::EventArgs^ e );
+        void btnRemove_Click(System::Object^ sender, System::EventArgs^ e);
+        void btnRestore_Click(System::Object^ sender, System::EventArgs^ e);
         void grdPlugins_CurrentCellDirtyStateChanged ( System::Object^ sender, System::EventArgs^ e );
         void grdPlugins_CellDoubleClick ( System::Object^ sender, DataGridViewCellEventArgs^ e );
         void txtSearch_GotFocus(System::Object^ sender, System::EventArgs^ e);
@@ -679,6 +765,15 @@ namespace UEPluginsDisableDefault {
 
         void UpdateFlow();
 
+        void LoadConfig();
+        void SaveConfig();
+        System::String^ GetConfigFilePath();
+        System::String^ GetBackupRoot();
+        System::String^ GetPluginRelativeDirectory(System::String^ PluginFilePath);
+        void ReleasePluginIcons();
+        void RemoveSelectedPlugins();
+        void RestoreBackupPlugins();
+
         void StateUpdate(AppState State);
         void StatusUpdate(System::String^ Message);
         void Searching(String^ Path);
@@ -689,7 +784,10 @@ namespace UEPluginsDisableDefault {
         void ControlsStateChange(ControlsState State);
         void BackupAll();
         List<String^>^ FindAllUPlugins(String^ Path);
-    };
+        System::String^ EngineRootPath;
+
+    private: System::Void flwUEFolder_Paint(System::Object^ sender, System::Windows::Forms::PaintEventArgs^ e) {}
+};
 };
 
 // DFX Main functions
@@ -699,10 +797,16 @@ using namespace System::Collections::Generic;
 
 String^ Append(String^ str0, System::String^ str1);
 String^ ReplaceSlashes(String^ Path);
+String^ TrimLeadingSlash(String^ Path);
+Drawing::Image^ LoadImageUnlocked(String^ FilePath);
 
 void GetJSONValue(String^& str0);
 
 bool SafeToBoolean(String^ input);
 bool IsIgnoredFolder(String^ Path);
 void CheckAcess(String^ FileUPlugin);
+
+void CopyDirectoryRecursive(String^ SourcePath, String^ TargetPath);
+void DeleteDirectoryRecursive(String^ Path);
+void MoveDirectorySafe(String^ SourcePath, String^ TargetPath);
 

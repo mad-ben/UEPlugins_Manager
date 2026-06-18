@@ -56,13 +56,27 @@ From project source folder, open UEPlugins_DisableDefault.sln in Visual Studio a
 
 Download the latest UEPlugins_DisableDefault.exe in the <a href="https://github.com/DarknessFX/UEPlugins_DisableDefault/releases/latest" target="_blank">Relases</a> page (UEPlugins_DisableDefault.zip).
 
+## NEW: Backup / Restore Plugins
+You can also debloat the Engine by moving full plugin folders out of Engine\Plugins into a backup folder and restoring them later.
+How to use:
+- Run the tool from <UE Root>\XDevops or a child folder under XDevops.
+- Use Backup Folder and Select to choose where removed plugins will be stored.
+- The selected backup path is saved to ueplugins_config.ini next to the executable.
+- In the plugin table, tick the Remove checkbox for the plugins you want to offload.
+- Press Remove Selected to move each selected plugin folder from Engine\Plugins... to the backup folder while preserving its relative path.
+- Press Restore All to move backed up plugin folders from the backup folder back into Engine\Plugins....
+
 ## Credits
 
 Icon: DefaultIcon128.png from Unreal Engine by Epic Games. <br/>
 Icon: Microsoft FluentUI System Icons - https://github.com/microsoft/fluentui-system-icons <br/>
 Font : Roboto-Regular by Christian Robertson - https://fonts.google.com/specimen/Roboto <br/>
+Repo: https://github.com/DarknessFX
 
 ## License
 
 @MIT - Free for everyone and any use. <br/><br/>
-DarknessFX @ <a href="https://dfx.lv" target="_blank">https://dfx.lv</a> | Twitter: <a href="https://twitter.com/DrkFX" target="_blank">@DrkFX</a> <br/>https://github.com/DarknessFX/UEPlugins_DisableDefault
+DarknessFX @ <a href="https://dfx.lv" target="_blank">https://dfx.lv</a> | Twitter: <a href="https://twitter.com/DrkFX" target="_blank">@DrkFX</a> <br/>
+https://github.com/DarknessFX/UEPlugins_DisableDefault
+
+X: <a href=" https://x.com/andkalysh </a>

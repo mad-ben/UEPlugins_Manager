@@ -12,6 +12,25 @@ using namespace System::IO;
                                                                                                                                                                                                                                                                                                                                                         using namespace Microsoft::Win32;
 using namespace UEPluginsDisableDefault;
 
+String^ GetEngineRootPath()
+{
+    DirectoryInfo^ appDir = gcnew DirectoryInfo(Application::StartupPath);
+
+    if (String::Compare(appDir->Name, "XDevops", true) == 0 && appDir->Parent != nullptr)
+    {
+        return appDir->Parent->FullName;
+    }
+
+    if (appDir->Parent != nullptr &&
+        String::Compare(appDir->Parent->Name, "XDevops", true) == 0 &&
+        appDir->Parent->Parent != nullptr)
+    {
+        return appDir->Parent->Parent->FullName;
+    }
+
+    return nullptr;
+}
+
 void AppForm::AppForm_Load ( System::Object^ sender, System::EventArgs^ e )
 {
     Application::EnableVisualStyles();
@@ -20,28 +39,27 @@ void AppForm::AppForm_Load ( System::Object^ sender, System::EventArgs^ e )
     cmbUEFolder->Items->Clear();
     dtbPlugins->Clear();
 
-    StatusUpdate("Finding default Unreal Engine folder in Registry.");
-    String^ UEDefaultPath = Registry::ClassesRoot->OpenSubKey("Unreal.ProjectFile\\shell\\open\\command")->GetValue("")->ToString();
+    StatusUpdate("Finding Unreal Engine root from XDevops folder.");
 
-    StatusUpdate("Reading Unreal Engine folder path in Registry \\\\HKEY_LOCAL_MACHINE\\SOFTWARE\\EpicGames\\Unreal Engine");
-    RegistryKey^ UEKey = Registry::LocalMachine->OpenSubKey("SOFTWARE\\EpicGames\\Unreal Engine");
-
-    for each (String^ SubKey in UEKey->GetSubKeyNames()) {
-      RegistryKey^ BuildKey = UEKey->OpenSubKey(SubKey);
-      if (BuildKey->GetValue("InstalledDirectory")) {
-        String^ UEPath = BuildKey->GetValue("InstalledDirectory")->ToString();
-        if (Directory::Exists(UEPath)) {
-          cmbUEFolder->Items->Add(UEPath);
-        }
-      }
+    EngineRootPath = GetEngineRootPath();
+    if (String::IsNullOrWhiteSpace(EngineRootPath) ||
+        !Directory::Exists(Append(EngineRootPath, "\\Engine\\Plugins")))
+    {
+        MessageBox::Show(this,
+            "Engine root not found. This tool must run from <UE5 ENGINE ROOT>\\XDevops or a child build folder under XDevops.",
+            "UEPlugins_DisableDefault",
+            MessageBoxButtons::OK,
+            MessageBoxIcon::Error);
+        Close();
+        return;
     }
 
-    if (cmbUEFolder->Items->Count != 0) {
-      cmbUEFolder->SelectedIndex = cmbUEFolder->Items->Count - 1;
-    }
+    LoadConfig();
 
     StatusUpdate("Finding .uplugins_backup with our backup file.");
     BackupAll();
+
+    Searching(EngineRootPath);
 
     UpdateFlow();
     mnuTemplateMinimal->Visible = false;
@@ -56,13 +74,263 @@ void AppForm::AppForm_SizeChanged ( System::Object^ sender, System::EventArgs^ e
 
 void AppForm::UpdateFlow ( )
 {
-    cmbUEFolder->Width = ClientSize.Width - 
-      mnuStrip->Width - 
-      splitter1->Width - 
-      btnBrowse->Width - 
-      lblUEFolder->Width - 
-      txtSearch->Width - 
-      56;
+    cmbUEFolder->Width = ClientSize.Width -
+        mnuStrip->Width -
+        splitter1->Width -
+        btnBrowse->Width -
+        btnRemove->Width -
+        btnRestore->Width -
+        lblUEFolder->Width -
+        txtSearch->Width -
+        72;
+}
+
+void AppForm::LoadConfig()
+{
+    String^ configPath = GetConfigFilePath();
+    if (!File::Exists(configPath))
+    {
+        return;
+    }
+
+    for each (String ^ line in File::ReadAllLines(configPath))
+    {
+        if (!line->StartsWith("BackupRoot=", StringComparison::CurrentCultureIgnoreCase))
+        {
+            continue;
+        }
+
+        String^ backupRoot = line->Substring(11)->Trim();
+        if (String::IsNullOrWhiteSpace(backupRoot))
+        {
+            break;
+        }
+
+        cmbUEFolder->Items->Clear();
+        cmbUEFolder->Items->Add(backupRoot);
+        cmbUEFolder->SelectedIndex = 0;
+        break;
+    }
+}
+
+void AppForm::SaveConfig()
+{
+    String^ backupRoot = GetBackupRoot();
+    String^ configPath = GetConfigFilePath();
+
+    cli::array<String^>^ lines = gcnew cli::array<String^>(1);
+    lines[0] = Append("BackupRoot=", backupRoot);
+    File::WriteAllLines(configPath, lines);
+}
+
+System::String^ AppForm::GetConfigFilePath()
+{
+    return Append(Application::StartupPath, "\\ueplugins_config.ini");
+}
+
+System::String^ AppForm::GetBackupRoot()
+{
+    if (cmbUEFolder->SelectedItem != nullptr)
+    {
+        return cmbUEFolder->SelectedItem->ToString();
+    }
+
+    if (!String::IsNullOrWhiteSpace(cmbUEFolder->Text))
+    {
+        return cmbUEFolder->Text;
+    }
+
+    return "";
+}
+
+System::String^ AppForm::GetPluginRelativeDirectory(System::String^ PluginFilePath)
+{
+    String^ pluginDirectory = Path::GetDirectoryName(PluginFilePath);
+    if (String::IsNullOrWhiteSpace(pluginDirectory))
+    {
+        return "";
+    }
+
+    pluginDirectory = pluginDirectory->Replace("/", "\\");
+    return TrimLeadingSlash(pluginDirectory);
+}
+
+void AppForm::ReleasePluginIcons()
+{
+    AppForm::grdPlugins->DataSource = nullptr;
+
+    for each (DataRow ^ row in AppForm::dtbPlugins->Rows)
+    {
+        if (row["celIcon"] == DBNull::Value)
+        {
+            continue;
+        }
+
+        Image^ iconImage = dynamic_cast<Image^>(row["celIcon"]);
+        if (iconImage != nullptr)
+        {
+            delete iconImage;
+        }
+
+        row["celIcon"] = DBNull::Value;
+    }
+
+    for each (DataRow ^ row in AppForm::dtbPluginsOrig->Rows)
+    {
+        if (row["celIcon"] == DBNull::Value)
+        {
+            continue;
+        }
+
+        row["celIcon"] = DBNull::Value;
+    }
+}
+
+void AppForm::RemoveSelectedPlugins()
+{
+    String^ backupRoot = GetBackupRoot();
+    if (String::IsNullOrWhiteSpace(backupRoot))
+    {
+        MessageBox::Show(this,
+            "Select a backup folder first.",
+            "UEPlugins_DisableDefault",
+            MessageBoxButtons::OK,
+            MessageBoxIcon::Information);
+        return;
+    }
+
+    Directory::CreateDirectory(backupRoot);
+
+    StateUpdate(AppState::Wait);
+    ControlsStateChange(ControlsState::Wait);
+    StatusUpdate("Removing selected plugins...");
+
+    int movedCount = 0;
+    int skippedCount = 0;
+
+    try
+    {
+        ReleasePluginIcons();
+        for each (DataRow ^ mDRPlug in dtbPlugins->Rows)
+        {
+            if ((bool)mDRPlug["celOffload"] != true)
+            {
+                continue;
+            }
+
+            String^ relativePluginDir = GetPluginRelativeDirectory(mDRPlug["celPath"]->ToString());
+            if (String::IsNullOrWhiteSpace(relativePluginDir))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            String^ sourceDir = Append(Append(EngineRootPath, "\\Engine\\Plugins\\"), relativePluginDir);
+            String^ targetDir = Append(Append(backupRoot, "\\"), relativePluginDir);
+
+            if (!Directory::Exists(sourceDir))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            String^ targetParent = Path::GetDirectoryName(targetDir);
+            if (!String::IsNullOrWhiteSpace(targetParent))
+            {
+                Directory::CreateDirectory(targetParent);
+            }
+
+            MoveDirectorySafe(sourceDir, targetDir);
+            movedCount++;
+        }
+
+        Searching(EngineRootPath);
+        StatusUpdate(Append(Append(movedCount.ToString(), " plugins moved to backup. Skipped: "), skippedCount.ToString()));
+    }
+    catch (Exception^ ex)
+    {
+        StatusUpdate("Remove failed.");
+        MessageBox::Show(this, ex->Message, "UEPlugins_DisableDefault", MessageBoxButtons::OK, MessageBoxIcon::Error);
+    }
+
+    ControlsStateChange(ControlsState::Default);
+    StateUpdate(AppState::Default);
+}
+
+void AppForm::RestoreBackupPlugins()
+{
+    String^ backupRoot = GetBackupRoot();
+    if (String::IsNullOrWhiteSpace(backupRoot) || !Directory::Exists(backupRoot))
+    {
+        MessageBox::Show(this,
+            "Backup folder not found.",
+            "UEPlugins_DisableDefault",
+            MessageBoxButtons::OK,
+            MessageBoxIcon::Information);
+        return;
+    }
+
+    StateUpdate(AppState::Wait);
+    ControlsStateChange(ControlsState::Wait);
+    StatusUpdate("Restoring plugins from backup...");
+
+    int restoredCount = 0;
+    int skippedCount = 0;
+
+    try
+    {
+        List<String^>^ pluginFiles = FindAllUPlugins(backupRoot);
+        List<String^>^ pluginDirs = gcnew List<String^>();
+        ReleasePluginIcons();
+
+        for each (String ^ pluginFile in pluginFiles)
+        {
+            String^ pluginDir = Path::GetDirectoryName(pluginFile);
+            if (!pluginDirs->Contains(pluginDir))
+            {
+                pluginDirs->Add(pluginDir);
+            }
+        }
+
+        for each (String ^ backupPluginDir in pluginDirs)
+        {
+            if (!Directory::Exists(backupPluginDir))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            String^ relativePluginDir = backupPluginDir->Substring(backupRoot->Length);
+            relativePluginDir = TrimLeadingSlash(relativePluginDir);
+
+            String^ targetDir = Append(Append(EngineRootPath, "\\Engine\\Plugins\\"), relativePluginDir);
+            if (Directory::Exists(targetDir))
+            {
+                skippedCount++;
+                continue;
+            }
+
+            String^ targetParent = Path::GetDirectoryName(targetDir);
+            if (!String::IsNullOrWhiteSpace(targetParent))
+            {
+                Directory::CreateDirectory(targetParent);
+            }
+
+            MoveDirectorySafe(backupPluginDir, targetDir);
+            restoredCount++;
+        }
+
+        Searching(EngineRootPath);
+        StatusUpdate(Append(Append(restoredCount.ToString(), " plugins restored. Skipped: "), skippedCount.ToString()));
+    }
+    catch (Exception^ ex)
+    {
+        StatusUpdate("Restore failed.");
+        MessageBox::Show(this, ex->Message, "UEPlugins_DisableDefault", MessageBoxButtons::OK, MessageBoxIcon::Error);
+    }
+
+    ControlsStateChange(ControlsState::Default);
+    StateUpdate(AppState::Default);
 }
 
 void AppForm::StatusUpdate(String^ Message)
@@ -106,24 +374,21 @@ void AppForm::mnuShowEnabled_Click ( System::Object^ sender, System::EventArgs^ 
 
 void AppForm::cmbUEFolder_SelectedIndexChanged ( System::Object^ sender, System::EventArgs^ e )
 {
-    Searching(cmbUEFolder->SelectedItem->ToString());
+    SaveConfig();
 }
 
 void AppForm::btnBrowse_Click ( System::Object^ sender, System::EventArgs^ e )
 {
+    dlgBrowse->Description = "Select plugin backup folder";
+
     ::DialogResult result = dlgBrowse->ShowDialog();
-    if( result == ::DialogResult::OK )
+    if (result == ::DialogResult::OK)
     {
-        if ( !cmbUEFolder->Items->Contains(dlgBrowse->SelectedPath) ) 
-        {
-            StatusUpdate(Append("Adding UE Folder Path: ", dlgBrowse->SelectedPath));
-            cmbUEFolder->Items->Add(dlgBrowse->SelectedPath);
-            cmbUEFolder->SelectedIndex = cmbUEFolder->Items->Count - 1;
-        }
-        else
-        {
-            StatusUpdate(Append("Path already added : ", dlgBrowse->SelectedPath));
-        }
+        cmbUEFolder->Items->Clear();
+        cmbUEFolder->Items->Add(dlgBrowse->SelectedPath);
+        cmbUEFolder->SelectedIndex = 0;
+        SaveConfig();
+        StatusUpdate(Append("Backup folder set: ", dlgBrowse->SelectedPath));
     }
 }
 
@@ -153,7 +418,7 @@ void AppForm::btnSave_Click ( System::Object^ sender, System::EventArgs^ e )
     StatusUpdate("Saving .uplugin changes...");
     ControlsStateChange(ControlsState::Wait);
 
-    String^ dirPlugin = Append(cmbUEFolder->SelectedItem->ToString(), "\\Engine\\Plugins\\");
+    String^ dirPlugin = Append(EngineRootPath, "\\Engine\\Plugins\\");
     String^ filePlugin = "";
 
     int iMod = 0;
@@ -249,6 +514,16 @@ void AppForm::btnSave_Click ( System::Object^ sender, System::EventArgs^ e )
     StateUpdate(AppState::Default);
 }
 
+void AppForm::btnRemove_Click(System::Object^ sender, System::EventArgs^ e)
+{
+    RemoveSelectedPlugins();
+}
+
+void AppForm::btnRestore_Click(System::Object^ sender, System::EventArgs^ e)
+{
+    RestoreBackupPlugins();
+}
+
 void AppForm::grdPlugins_CurrentCellDirtyStateChanged ( System::Object^ sender, System::EventArgs^ e )
 {
     if ( grdPlugins->IsCurrentCellDirty ) 
@@ -264,7 +539,7 @@ void AppForm::grdPlugins_CellDoubleClick ( System::Object^ sender, DataGridViewC
   // Double-Click PATH column open Windows Explorer
   if (e->ColumnIndex == 7) {
     String^ PluginPath; 
-    PluginPath = Append(cmbUEFolder->SelectedItem->ToString(), "\\Engine\\Plugins\\");
+    PluginPath = Append(EngineRootPath, "\\Engine\\Plugins\\");
     PluginPath = Append(PluginPath, grdPlugins[e->ColumnIndex, e->RowIndex]->Value->ToString());
     PluginPath = PluginPath->Substring(0, PluginPath->LastIndexOf("\\"));
     System::Diagnostics::Process::Start(PluginPath);
@@ -310,34 +585,79 @@ String^ ReplaceSlashes(String^ Path)
     return Path;
 }
 
+String^ TrimLeadingSlash(String^ Path)
+{
+    if (String::IsNullOrWhiteSpace(Path))
+    {
+        return "";
+    }
+
+    while (Path->StartsWith("\\") || Path->StartsWith("/"))
+    {
+        Path = Path->Substring(1);
+    }
+
+    return Path;
+}
+
+Drawing::Image^ LoadImageUnlocked(String^ FilePath)
+{
+    if (!File::Exists(FilePath))
+    {
+        return nullptr;
+    }
+
+    array<Byte>^ bytes = File::ReadAllBytes(FilePath);
+    MemoryStream^ stream = gcnew MemoryStream(bytes);
+
+    try
+    {
+        Image^ sourceImage = Image::FromStream(stream);
+        try
+        {
+            return gcnew Bitmap(sourceImage);
+        }
+        finally
+        {
+            delete sourceImage;
+        }
+    }
+    finally
+    {
+        delete stream;
+    }
+}
+
 void AppForm::Searching(String^ Path)
 {
     StateUpdate(AppState::Wait);
     StatusUpdate("Searching UPlugins ...");
     ControlsStateChange(ControlsState::Wait);
+    ReleasePluginIcons();
     AppForm::dtbPlugins->Clear();
     AppForm::dtbPluginsOrig->Clear();
     AppForm::grdPlugins->DataSource = nullptr;
 
-    if ( !Path->Contains("Plugins") )
+    if (!Path->Contains("Plugins"))
     {
         Path = Append(Path, "\\Engine\\Plugins");
     }
 
-    //for each (String^ dirCategory in Directory::EnumerateDirectories(Path) )
-    //{
-        FindUPlugin(Path);
-    //}
+    FindUPlugin(Path);
 
     AppForm::dtbPlugins->DefaultView->Sort = "celEnabledByDefault DESC, celFriendlyName ASC, celCategory ASC";
     AppForm::dtbPlugins->AcceptChanges();
     AppForm::dtbPluginsOrig = AppForm::dtbPlugins->Copy();
     AppForm::dtbPluginsOrig->DefaultView->Sort = "celEnabledByDefault DESC, celFriendlyName ASC, celCategory ASC";
     AppForm::grdPlugins->DataSource = AppForm::dtbPlugins;
-    AppForm::grdPlugins->CurrentCell = AppForm::grdPlugins[0,0];
+
+    if (AppForm::grdPlugins->Rows->Count > 0)
+    {
+        AppForm::grdPlugins->CurrentCell = AppForm::grdPlugins[0, 0];
+    }
 
     ControlsStateChange(ControlsState::Default);
-    StatusUpdate(Append(Append(Append(CountEnabledByDefault().ToString(), " plugins Enabled By Default. " ), AppForm::dtbPlugins->Rows->Count.ToString()), " plugins total."));
+    StatusUpdate(Append(Append(Append(CountEnabledByDefault().ToString(), " plugins Enabled By Default. "), AppForm::dtbPlugins->Rows->Count.ToString()), " plugins total."));
     StateUpdate(AppState::Default);
 }
 
@@ -385,21 +705,56 @@ void AppForm::ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
     mDataRow["celName"] = Path::GetFileNameWithoutExtension(FileUPlugin);
     mDataRow["celPath"] = FileUPlugin->Substring(FileUPlugin->IndexOf("plugins", StringComparison::CurrentCultureIgnoreCase) + 8);
 
+    Collections::Generic::List<String^>^ aDependencies = gcnew Collections::Generic::List<String^>();
+    bool bReadingDependencies = false;
+
     try {
-      if ( File::Exists(Append(Path::GetDirectoryName(FileUPlugin), "\\Resources\\icon128.png")) ) 
-      {
-          mDataRow["celIcon"] = Drawing::Image::FromFile( Append(Path::GetDirectoryName(FileUPlugin), "\\Resources\\icon128.png") );
-      }
-      else
-      {
-          mDataRow["celIcon"] = Drawing::Image::FromFile( Append(AppForm::cmbUEFolder->SelectedItem->ToString(), "\\Engine\\Plugins\\Editor\\PluginBrowser\\Resources\\DefaultIcon128.png") );
-      }
+        String^ pluginIconPath = Append(Path::GetDirectoryName(FileUPlugin), "\\Resources\\icon128.png");
+        String^ defaultIconPath = Append(EngineRootPath, "\\Engine\\Plugins\\Editor\\PluginBrowser\\Resources\\DefaultIcon128.png");
+
+        Image^ iconImage = nullptr;
+        if (File::Exists(pluginIconPath))
+        {
+            iconImage = LoadImageUnlocked(pluginIconPath);
+        }
+        else
+        {
+            iconImage = LoadImageUnlocked(defaultIconPath);
+        }
+
+        if (iconImage != nullptr)
+        {
+            mDataRow["celIcon"] = iconImage;
+        }
     }
     catch (...) {}
 
     while ( !reader->EndOfStream )
     {
         String^ line = reader->ReadLine();
+        String^ trimmedLine = line->Trim();
+
+        if (trimmedLine->StartsWith("\"Plugins\"", StringComparison::CurrentCultureIgnoreCase))
+        {
+            bReadingDependencies = !trimmedLine->Contains("]");
+            continue;
+        }
+
+        if (bReadingDependencies)
+        {
+            if (trimmedLine->Contains("\"Name\""))
+            {
+                String^ dependencyName = line;
+                GetJSONValue(dependencyName);
+                aDependencies->Add(dependencyName);
+            }
+            if (trimmedLine->Contains("]"))
+            {
+                bReadingDependencies = false;
+            }
+            continue;
+        }
+
         if ( line->Contains("VersionName") ) 
         {
             GetJSONValue(line);
@@ -437,6 +792,8 @@ void AppForm::ReadUPlugin(String^ FileUPlugin, DataRow^& mDataRow)
             continue;            
         }
     }
+    mDataRow["celDependencies"] = String::Join(", ", aDependencies->ToArray());
+
     reader->Close();
     filestream->Close();
 };
@@ -552,33 +909,38 @@ void AppForm::txtSearch_KeyUp(System::Object^ sender, System::Windows::Forms::Ke
 
 void AppForm::BackupAll()
 {
-  String^ bkpPath = Append(Application::StartupPath, "\\UEPlugins_DisableDefault.uplugins_backup");
-  if (!File::Exists(bkpPath)) {
-    StateUpdate(AppState::Wait);
-    StatusUpdate("Generating backup before first use...");
-    ControlsStateChange(ControlsState::Wait);
+    String^ bkpPath = Append(Application::StartupPath, "\\UEPlugins_DisableDefault.uplugins_backup");
+    if (!File::Exists(bkpPath))
+    {
+        StateUpdate(AppState::Wait);
+        StatusUpdate("Generating backup before first use...");
+        ControlsStateChange(ControlsState::Wait);
 
-    FileStream^ newStream = gcnew FileStream(bkpPath, FileMode::CreateNew);
-    StreamWriter^ newWriter = gcnew StreamWriter(newStream);
-    
-    for each (String^ UEPath in AppForm::cmbUEFolder->Items) {
-      Collections::Generic::List<String^>^ aPlugins = FindAllUPlugins(Append(UEPath, "\\Engine\\Plugins"));
-      for each (String^ sPlugin in aPlugins) {
-        for each(String^ sLine in File::ReadLines(sPlugin)) {
-          if (sLine->Contains("EnabledByDefault") && sLine->Contains("true")) {
-            newWriter->WriteLine(sPlugin);
-          }
+        FileStream^ newStream = gcnew FileStream(bkpPath, FileMode::CreateNew);
+        StreamWriter^ newWriter = gcnew StreamWriter(newStream);
+
+        Collections::Generic::List<String^>^ aPlugins = FindAllUPlugins(Append(EngineRootPath, "\\Engine\\Plugins"));
+        for each (String ^ sPlugin in aPlugins)
+        {
+            for each (String ^ sLine in File::ReadLines(sPlugin))
+            {
+                if (sLine->Contains("EnabledByDefault") && sLine->Contains("true"))
+                {
+                    newWriter->WriteLine(sPlugin);
+                }
+            }
         }
-      }
+
+        newWriter->Close();
+        newStream->Close();
+        ControlsStateChange(ControlsState::Default);
+        StatusUpdate(Append("Backup created at ", bkpPath));
+        StateUpdate(AppState::Default);
     }
-    newWriter->Close();
-    newStream->Close();
-    ControlsStateChange(ControlsState::Default);
-    StatusUpdate(Append("Backup created at ", bkpPath));
-    StateUpdate(AppState::Default);
-  } else {
-    StatusUpdate("");
-  }
+    else
+    {
+        StatusUpdate("");
+    }
 }
 
 List<String^>^ AppForm::FindAllUPlugins(String^ Path)
@@ -616,6 +978,54 @@ void CheckAcess(String^ FileUPlugin)
       throw gcnew AccessViolationException(Append(Append("File Access Error: ", FileUPlugin), " is Read-Only, try to run UEPlugins_DisableDefault as Administrator."));
     }
   }
+}
+
+void CopyDirectoryRecursive(String^ SourcePath, String^ TargetPath)
+{
+    Directory::CreateDirectory(TargetPath);
+
+    for each (String ^ filePath in Directory::GetFiles(SourcePath))
+    {
+        String^ targetFilePath = Append(Append(TargetPath, "\\"), Path::GetFileName(filePath));
+        File::Copy(filePath, targetFilePath, true);
+    }
+
+    for each (String ^ directoryPath in Directory::GetDirectories(SourcePath))
+    {
+        String^ targetDirectoryPath = Append(Append(TargetPath, "\\"), Path::GetFileName(directoryPath));
+        CopyDirectoryRecursive(directoryPath, targetDirectoryPath);
+    }
+}
+
+void DeleteDirectoryRecursive(String^ Path)
+{
+    if (Directory::Exists(Path))
+    {
+        Directory::Delete(Path, true);
+    }
+}
+
+void MoveDirectorySafe(String^ SourcePath, String^ TargetPath)
+{
+    if (Directory::Exists(TargetPath))
+    {
+        DeleteDirectoryRecursive(TargetPath);
+    }
+
+    try
+    {
+        Directory::Move(SourcePath, TargetPath);
+    }
+    catch (IOException^)
+    {
+        CopyDirectoryRecursive(SourcePath, TargetPath);
+        DeleteDirectoryRecursive(SourcePath);
+    }
+    catch (UnauthorizedAccessException^)
+    {
+        CopyDirectoryRecursive(SourcePath, TargetPath);
+        DeleteDirectoryRecursive(SourcePath);
+    }
 }
 
 void AppForm::mnuBackupSave_Click(System::Object^ sender, System::EventArgs^ e) 
@@ -669,7 +1079,7 @@ void AppForm::mnuBackupSave_Click(System::Object^ sender, System::EventArgs^ e)
     FileStream^ newStream = gcnew FileStream(bkpPath, FileMode::CreateNew);
     StreamWriter^ newWriter = gcnew StreamWriter(newStream);
     for each (DataRow ^ mDRPlug in dtbPlugins->Rows) {
-      String^ UEPath = Append(AppForm::cmbUEFolder->SelectedItem->ToString(), "\\Engine\\Plugins\\");
+      String^ UEPath = Append(AppForm::EngineRootPath, "\\Engine\\Plugins\\");
       if (mDRPlug["celEnabledByDefault"]->ToString()->ToLower() == "true") {
         if (!bIsTemplate) {
           newWriter->WriteLine(Append(UEPath, mDRPlug["celPath"]->ToString()));
@@ -733,7 +1143,7 @@ void AppForm::mnuBackupLoad_Click(System::Object^ sender, System::EventArgs^ e)
     ControlsStateChange(ControlsState::Wait);
 
     int Counter = 0;
-    String^ UEPath = Append(AppForm::cmbUEFolder->SelectedItem->ToString(), "\\Engine\\Plugins\\");
+    String^ UEPath = Append(AppForm::EngineRootPath, "\\Engine\\Plugins\\");
     FileStream^ newStream = gcnew FileStream(bkpPath, FileMode::Open);
     StreamReader^ newReader = gcnew StreamReader(newStream);
     for each (DataRow ^ mDRPlug in dtbPlugins->Rows) {
